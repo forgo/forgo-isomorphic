@@ -34,6 +34,7 @@ context(
       return {
         homeDir: SRC_PATH,
         output: `${BUILD_PATH}\$name.js`,
+        hash: this.isProduction,
         sourceMaps: !this.isProduction,
         allowSyntheticDefaultImports: true,
       }
@@ -41,29 +42,39 @@ context(
     getServerOptions() {
       return {
         target: 'server@es5',
+        definedExpressions: {
+          "__isBrowser__": false,
+        },
         plugins: [
-          QuantumPlugin({
-            treeshake: true,
-            uglify: this.isProduction,
-            definedExpressions: {
-              "__isBrowser__": false,
-            },
-          }),
+          // QuantumPlugin({
+          //   treeshake: true,
+          //   uglify: this.isProduction,
+          //   definedExpressions: {
+          //     "__isBrowser__": false,
+          //   },
+          // }),
         ],
       }
     }
     getClientOptions() {
       return {
         target: 'browser@es5',
+        definedExpressions: {
+          "__isBrowser__": true,
+        },
         plugins: [
-          CSSPlugin(),
-          QuantumPlugin({
-            treeshake: true,
-            uglify: this.isProduction,
-            definedExpressions: {
-              "__isBrowser__": true,
-            },
+          WebIndexPlugin({
+            title: "Wat?",
+            template: `${SRC_PATH_CLIENT}index.html`
           }),
+          CSSPlugin(),
+          // QuantumPlugin({
+          //   treeshake: true,
+          //   uglify: this.isProduction,
+          //   definedExpressions: {
+          //     "__isBrowser__": true,
+          //   },
+          // }),
         ],
       }
     }
@@ -72,7 +83,7 @@ context(
 
 // clean task
 task('clean', context =>  {
-  src(BUILD_PATH).clean(BUILD_PATH).exec()
+  return src(BUILD_PATH).clean(BUILD_PATH).exec()
 })
 
 // config task
@@ -103,15 +114,10 @@ task('server', context =>  {
     ...context.getServerOptions()
   }
 
-  if(context.isProduction) {
-    fuse
-      .bundle(SERVER_BUNDLE)
-      .instructions(` > [${SERVER_PATH}${SERVER_ENTRY}]`)
-  }
-  else {
-    fuse
-      .bundle(SERVER_BUNDLE)
-      .instructions(` > [${SERVER_PATH}${SERVER_ENTRY}]`)
+  const server = fuse.bundle(SERVER_BUNDLE)
+
+  if(!context.isProduction) {
+    server
       .completed(proc => {
         proc.require({
           // To enable debugging (using VS Code)
@@ -122,6 +128,8 @@ task('server', context =>  {
         `${SRC_PATH_SERVER}**`,
       ].join('|'))
   }
+  server.instructions(` > [${SERVER_PATH}${SERVER_ENTRY}]`)
+  return server
 })
 
 // client task
@@ -131,24 +139,21 @@ task('client', context =>  {
     ...context.getClientOptions()
   }
 
-  if(context.isProduction) {
-    fuse
-      .bundle(CLIENT_BUNDLE)
-      .instructions(` > ${CLIENT_PATH}${CLIENT_ENTRY}`)
-  }
-  else {
-    fuse
-      .bundle(CLIENT_BUNDLE)
-      .instructions(` > ${CLIENT_PATH}${CLIENT_ENTRY}`)
-      .hmr()
+  const client = fuse.bundle(CLIENT_BUNDLE)
+
+  if(!context.isProduction) {
+    client
       .watch([
         `${SRC_PATH_CLIENT}**`,
       ].join('|'))
+      .hmr()
   }
+  client.instructions(` > ${CLIENT_PATH}${CLIENT_ENTRY}`)
+  return client
 })
 
 const run = context => {
-  fuse.run()
+  return fuse.run()
 }
 
 task('dev', ['clean', 'dev:config', 'server', 'client'], run)
